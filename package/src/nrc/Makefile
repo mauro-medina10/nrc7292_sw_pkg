@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+KBUILD_EXTRA_SYMBOLS := /home/pi/nrc7292_sw_pkg/package/src/nrc/Module.symvers
 KDIR ?= /lib/modules/$(shell uname -r)/build
 CHECKPATCH ?= $(KDIR)/scripts/checkpatch.pl
 
@@ -28,7 +29,7 @@ ccflags-y := \
 	-DDEBUG \
 	-DCONFIG_NRC_HIF_CSPI \
 	-DENABLE_DYNAMIC_PS \
-	-DCONFIG_MAC80211_MESH
+	-DCONFIG_MAC80211_MESH 
 
 ldflags-y += -T$(M)/nrc.lds
 
@@ -39,7 +40,7 @@ ccflags-y += \
 endif
 
 #ccflags-y += -Wall -Werror -g
-ccflags-y += -Wall -Werror
+ccflags-y += -Wall -Wno-error=incompatible-pointer-types
 
 all: modules
 
