@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-KBUILD_EXTRA_SYMBOLS := /home/pi/nrc7292_sw_pkg/package/src/nrc/Module.symvers
 KDIR ?= /lib/modules/$(shell uname -r)/build
 CHECKPATCH ?= $(KDIR)/scripts/checkpatch.pl
 
