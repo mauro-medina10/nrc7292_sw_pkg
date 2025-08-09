@@ -8,7 +8,7 @@ script_path = "/home/pi/nrc_pkg/script/"
 # Default Configuration (you can change value you want here)
 ##################################################################################
 # Raspbery Pi Conf.
-max_cpuclock      = 1         # Set Max CPU Clock : 0(off) or 1(on)
+max_cpuclock      = 0         # Set Max CPU Clock : 0(off) or 1(on)
 ##################################################################################
 # Firmware Conf.
 model             = 7292      # 7292/7393/7394
@@ -718,12 +718,14 @@ def run_common():
     print("[3] Loading module")
     print("sudo insmod /home/pi/nrc_pkg/sw/driver/nrc.ko " + insmod_arg)
     os.system("sudo insmod /home/pi/nrc_pkg/sw/driver/nrc.ko " + insmod_arg + "")
-
+    
+    print("insmod send")
+	
     if int(spi_polling_interval) <= 0:
         time.sleep(5)
     else:
         time.sleep(10)
-
+    print("insmod done")
     if strSTA() == 'RELAY' and int(relay_type) == 0:
         addWLANInterface('wlan1')
     elif strSTA() == 'MESH' and int(relay_type) == 2:
@@ -792,13 +794,13 @@ def run_sta(interface):
     if int(use_bridge_setup) > 0:
         interface = 'br0'
     ret = check(interface)
-    while ret == '':
-        print("Waiting for IP")
-        time.sleep(5)
-        ret = check(interface)
+    #while ret == '':
+    #    print("Waiting for IP")
+    #    time.sleep(5)
+    #    ret = check(interface)
 
-    print(ret)
-    print("IP assigned. HaLow STA ready")
+    #print(ret)
+    #print("IP assigned. HaLow STA ready")
     print("--------------------------------------------------------------------")
 
 def launch_hostapd(interface, orig_hostapd_conf_file, country, debug, channel):
