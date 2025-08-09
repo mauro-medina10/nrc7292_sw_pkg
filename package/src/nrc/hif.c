@@ -88,15 +88,15 @@ void nrc_hif_free (struct nrc_hif_device *hdev)
 
 void nrc_hif_free_skb(struct nrc *nw, struct sk_buff *skb)
 {
-	struct hif *hif = (void *)skb->data;
-	struct frame_hdr *fh = (struct frame_hdr *)(hif + 1);
-	bool ack = true;
-	int credit;
-
 	if (!skb) {
 		dev_err(nw->dev, "[%s] skb is NULL!", __func__);
 		return;
 	}
+
+	struct hif *hif = (void *)skb->data;
+	struct frame_hdr *fh = (struct frame_hdr *)(hif + 1);
+	bool ack = true;
+	int credit;
 
 	if (hif->type == HIF_TYPE_FRAME) {
 		struct ieee80211_tx_info *txi = IEEE80211_SKB_CB(skb);

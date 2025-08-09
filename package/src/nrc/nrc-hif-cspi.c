@@ -2477,7 +2477,7 @@ static int nrc_cspi_probe(struct spi_device *spi)
 	nrc_dbg_init(&spi->dev);
 
 	priv = nrc_cspi_alloc(spi);
-	if (IS_ERR(priv)) {
+	if (!priv || IS_ERR(priv)) {
 		dev_err(&spi->dev, "Failed to nrc_cspi_alloc\n");
 		return PTR_ERR(priv);
 	}
@@ -2489,7 +2489,7 @@ static int nrc_cspi_probe(struct spi_device *spi)
 	}
 
 	hdev = nrc_hif_alloc(&spi->dev, (void *)priv,  &spi_ops);
-	if (IS_ERR(hdev)) {
+	if (!hdev || IS_ERR(hdev)) {
 		dev_err(&spi->dev, "Failed to nrc_hif_alloc\n");
 		ret = PTR_ERR(hdev);
 		goto err_gpio_free;
@@ -2511,7 +2511,7 @@ try:
 	}
 
 	nw = nrc_nw_alloc(&spi->dev, hdev);
-	if (IS_ERR(nw)) {
+	if (!nw || IS_ERR(nw)) {
 		dev_err(&spi->dev, "Failed to nrc_nw_alloc\n");
 		goto err_hif_free;
 	}
@@ -2556,8 +2556,21 @@ static void nrc_cspi_remove(struct spi_device *spi)
 	struct nrc_spi_priv *priv;
 
 	nw = spi_get_drvdata(spi);
+	if(!nw) {
+		dev_err(&spi->dev, "nrc_cspi_remove: spi_get_drvdata() is NULL");
+		return;
+	}
+
 	hdev = nw->hif;
+	if(!hdev) {
+		dev_err(&spi->dev, "nrc_cspi_remove: hif is NULL");
+		goto remove_err;
+	}
 	priv = hdev->priv;
+	if(!priv) {
+		dev_err(&spi->dev, "nrc_cspi_remove: priv is NULL");
+		goto remove_err;
+	}
 
 	nrc_nw_stop(nw);
 
@@ -2570,6 +2583,8 @@ static void nrc_cspi_remove(struct spi_device *spi)
 	nrc_cspi_gpio_free(spi);
 
 	nrc_cspi_free(priv);
+
+remove_err:	
 #if NRC_TARGET_KERNEL_VERSION < KERNEL_VERSION(5,18,0)
 	return 0;
 #endif

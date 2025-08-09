@@ -594,8 +594,13 @@ void nrc_set_auto_ba(bool toggle)
 		(ampdu_mode == NRC_AMPDU_AUTO)? "ON" : "OFF");
 }
 
-int nrc_nw_set_model_conf(struct nrc *nw, u16 chip_id)
+int nrc_nw_set_model_conf(struct nrc *nw, uint16_t chip_id)
 {
+	if(!nw || !nw->hif) {
+		dev_err(nw->dev, "Invalid NRC device\n");
+		return -EINVAL;
+	}
+
 	nw->chip_id = chip_id;
 	dev_info(nw->dev, "Configuration of H/W Dependent Setting : %04x\n", nw->chip_id);
 
@@ -771,7 +776,7 @@ struct nrc *nrc_nw_alloc(struct device *dev, struct nrc_hif_device *hdev)
 	hw = nrc_mac_alloc_hw(sizeof(struct nrc), NRC_DRIVER_NAME);
 
 	if (!hw) {
-			return NULL;
+		return NULL;
 	}
 
 	nw = hw->priv;
