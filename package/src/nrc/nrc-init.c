@@ -85,7 +85,7 @@ int spi_cs_num;
 module_param(spi_cs_num, int, 0600);
 MODULE_PARM_DESC(spi_cs_num, "SPI chip select number");
 
-int spi_gpio_irq = 5;
+int spi_gpio_irq = TARGET_GPIO_SPI_IRQ;
 module_param(spi_gpio_irq, int, 0600);
 MODULE_PARM_DESC(spi_gpio_irq, "SPI gpio irq");
 
@@ -291,7 +291,7 @@ MODULE_PARM_DESC(nrc_country_code, "Two letter fw country code");
 /**
  * gpio for power save (default Host_output(GP20) --> Target_input(GP11))
  */
-int power_save_gpio[2] = {RPI_GPIO_FOR_PS, TARGET_GPIO_FOR_WAKEUP};
+int power_save_gpio[2] = {TARGET_GPIO_FOR_PS, TARGET_GPIO_FOR_WAKEUP};
 module_param_array(power_save_gpio, int, NULL, 0600);
 MODULE_PARM_DESC(power_save_gpio, "gpio for power save");
 
@@ -594,8 +594,13 @@ void nrc_set_auto_ba(bool toggle)
 		(ampdu_mode == NRC_AMPDU_AUTO)? "ON" : "OFF");
 }
 
-int nrc_nw_set_model_conf(struct nrc *nw, u16 chip_id)
+int nrc_nw_set_model_conf(struct nrc *nw, uint16_t chip_id)
 {
+	if(!nw || !nw->hif) {
+		dev_err(nw->dev, "Invalid NRC device\n");
+		return -EINVAL;
+	}
+
 	nw->chip_id = chip_id;
 	dev_info(nw->dev, "Configuration of H/W Dependent Setting : %04x\n", nw->chip_id);
 
@@ -771,7 +776,7 @@ struct nrc *nrc_nw_alloc(struct device *dev, struct nrc_hif_device *hdev)
 	hw = nrc_mac_alloc_hw(sizeof(struct nrc), NRC_DRIVER_NAME);
 
 	if (!hw) {
-			return NULL;
+		return NULL;
 	}
 
 	nw = hw->priv;
