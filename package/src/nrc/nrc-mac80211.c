@@ -1465,25 +1465,43 @@ void nrc_mac_add_tlv_channel(struct sk_buff *skb,
 
 static int nrc_mac_config(struct ieee80211_hw *hw, u32 changed)
 {
+	if(!hw)
+	{
+		pr_err("Nrc mac config fail: hw is NULL");
+		return -EFAULT;
+	}
+
 	struct nrc *nw = hw->priv;
+	if(!nw)
+	{
+		pr_err("Nrc mac config fail: nw is NULL");
+		return -EFAULT;
+	}
+
 	struct wim_pm_param *p;
 	struct sk_buff *skb;
 	int ret = 0;
-	struct ieee80211_channel ch = {0,};
 #if defined(CONFIG_SUPPORT_BD)
 	int i;
 	bool supp_ch_flag = false;
 #endif /* defined(CONFIG_SUPPORT_BD) */
 #ifdef CONFIG_SUPPORT_CHANNEL_INFO
-	struct cfg80211_chan_def chandef = {0,};
-	memcpy(&chandef, &hw->conf.chandef, sizeof(struct cfg80211_chan_def));
-	memcpy(&ch, hw->conf.chandef.chan, sizeof(struct ieee80211_channel));
-	chandef.chan = &ch;
+    const struct cfg80211_chan_def *c = &hw->conf.chandef;
+    if (!c->chan) {
+        pr_err("%s: hw->conf.chandef.chan is NULL\n", __func__);
+        return -EINVAL;
+    }
+    struct cfg80211_chan_def chandef = *c;   // struct copy
+    struct ieee80211_channel ch = *c->chan;  // copy channel by value
+    chandef.chan = &ch;                      // point to local copy
 #else
-	struct ieee80211_conf chandef = {0,};
-	memcpy(&chandef, &hw->conf, sizeof(struct ieee80211_conf));
-	memcpy(&ch, hw->conf.channel, sizeof(struct ieee80211_channel));
-	chandef.channel = &ch;
+    if (!hw->conf.channel) {
+        pr_err("%s: hw->conf.channel is NULL\n", __func__);
+        return -EINVAL;
+    }
+    struct ieee80211_conf chandef = hw->conf; // struct copy
+    struct ieee80211_channel ch = *hw->conf.channel;
+    chandef.channel = &ch;
 #endif
 
 #if defined(CONFIG_SUPPORT_BD)
@@ -1498,14 +1516,24 @@ static int nrc_mac_config(struct ieee80211_hw *hw, u32 changed)
 				}
 #else
 				if(g_supp_ch_list.nons1g_ch_freq[i] ==
-					hw->conf.chandef.chan->center_freq) {
+#ifdef CONFIG_SUPPORT_CHANNEL_INFO
+    				chandef.chan->center_freq
+#else
+    				chandef.channel->center_freq
+#endif
+				) {
 					supp_ch_flag = true;
 					break;
 				}
 #endif
 			}
 			if (!supp_ch_flag && nw->alpha2[0] != 'U' && nw->alpha2[1] != 'S' &&
-				hw->conf.chandef.chan->center_freq == 2412) {
+#ifdef CONFIG_SUPPORT_CHANNEL_INFO
+				chandef.chan->center_freq
+#else
+				chandef.channel->center_freq
+#endif
+				== 2412) {
 				supp_ch_flag = true;
 #ifdef CONFIG_SUPPORT_CHANNEL_INFO
 				chandef.chan->center_freq = g_supp_ch_list.nons1g_ch_freq[0];
@@ -1515,14 +1543,25 @@ static int nrc_mac_config(struct ieee80211_hw *hw, u32 changed)
 			}
 			if(!supp_ch_flag) {
 				nrc_mac_dbg("%s: Not supported channel %u",
-					__func__, hw->conf.chandef.chan->center_freq);
+					__func__, 
+#ifdef CONFIG_SUPPORT_CHANNEL_INFO
+    				chandef.chan->center_freq
+#else
+    				chandef.channel->center_freq
+#endif
+				);
 				return -EINVAL;
 			}
 		}
 	}
 #else
 	if (nw->alpha2[0] != 'U' && nw->alpha2[1] != 'S' &&
-			hw->conf.chandef.chan->center_freq == 2412) {
+#ifdef CONFIG_SUPPORT_CHANNEL_INFO
+    		chandef.chan->center_freq
+#else
+    		chandef.channel->center_freq
+#endif
+			== 2412) {
 #ifdef CONFIG_SUPPORT_CHANNEL_INFO
 		chandef.chan->center_freq = get_base_freq();
 #else
@@ -1538,7 +1577,7 @@ static int nrc_mac_config(struct ieee80211_hw *hw, u32 changed)
 		/* TODO: Remove the following line */
 #ifdef CONFIG_SUPPORT_CHANNEL_INFO
 		nw->band = hw->conf.chandef.chan->band;
-		nw->center_freq = hw->conf.chandef.chan->center_freq;
+		nw->center_freq = chandef.chan->center_freq;
 #else
 		nw->band = hw->conf.channel->band;
 		nw->center_freq = hw->conf.channel->center_freq;
@@ -2947,63 +2986,70 @@ static void nrc_mac_set_default_unicast_key(struct ieee80211_hw *hw,
 }
 #endif
 
-static void nrc_mac_channel_policy(void *data, u8 *mac,
-		struct ieee80211_vif *vif)
+static void nrc_mac_channel_policy(void *data, u8 *mac, struct ieee80211_vif *vif)
 {
-	struct sk_buff *skb;
-	struct nrc_vif *i_vif = to_i_vif(vif);
-	struct nrc *nw = i_vif->nw;
+    struct nrc_vif *i_vif = to_i_vif(vif);
+    struct nrc *nw = i_vif ? i_vif->nw : NULL;
 #ifdef CONFIG_SUPPORT_CHANNEL_INFO
-	struct cfg80211_chan_def *chan_to_follow =
-		(struct cfg80211_chan_def *)data;
-	struct wireless_dev *wdev = ieee80211_vif_to_wdev(vif);
+    struct cfg80211_chan_def *chan_to_follow = (void *)data;
+    struct wireless_dev *wdev = ieee80211_vif_to_wdev(vif);
 #ifdef CONFIG_USE_LINK_ID
-	struct cfg80211_chan_def *chandef;
+    const struct cfg80211_chan_def *chandef = NULL;
 #endif
 #else
-	struct ieee80211_conf *chan_to_follow =
-		(struct ieee80211_conf *)data;
-	struct wireless_dev *wdev = i_vif->dev->ieee80211_ptr;
+    const struct ieee80211_conf *chan_to_follow = (const void *)data;
+    struct wireless_dev *wdev = i_vif && i_vif->dev ? i_vif->dev->ieee80211_ptr : NULL;
 #endif
 
-	if (!wdev)
-		return;
+    if (!wdev || !nw)
+        return;
+
+    /* If this iterate call isn’t carrying a channel, just bail. */
+    if (!chan_to_follow)
+        return;
 
 #ifdef CONFIG_SUPPORT_CHANNEL_INFO
-#ifdef CONFIG_USE_LINK_ID
-	chandef = wdev_chandef(wdev, vif->bss_conf.link_id);
-	if (chandef->chan &&
-		chandef->chan->center_freq ==
-		chan_to_follow->chan->center_freq)
-#else
-	if (wdev->chandef.chan &&
-		wdev->chandef.chan->center_freq ==
-		chan_to_follow->chan->center_freq)
-#endif /* ifdef CONFIG_USE_LINK_ID */
-#else
-	if (wdev->channel &&
-		wdev->channel->center_freq ==
-		chan_to_follow->channel->center_freq)
-#endif /* ifdef CONFIG_SUPPORT_CHANNEL_INFO */
-		return;
+    if (!chan_to_follow->chan)
+        return;
 
-	if (!(vif->type == NL80211_IFTYPE_STATION ||
-		vif->type == NL80211_IFTYPE_MESH_POINT))
-		return;
+#ifdef CONFIG_USE_LINK_ID
+    chandef = wdev_chandef(wdev, vif->bss_conf.link_id);
+    if (chandef && chandef->chan &&
+        chandef->chan->center_freq == chan_to_follow->chan->center_freq)
+        return;
+#else
+    if (wdev->chandef.chan &&
+        wdev->chandef.chan->center_freq == chan_to_follow->chan->center_freq)
+        return;
+#endif /* CONFIG_USE_LINK_ID */
+#else /* !CONFIG_SUPPORT_CHANNEL_INFO */
+    if (!chan_to_follow->channel)
+        return;
+
+    if (wdev->channel &&
+        wdev->channel->center_freq == chan_to_follow->channel->center_freq)
+        return;
+#endif /* CONFIG_SUPPORT_CHANNEL_INFO */
+
+    if (!(vif->type == NL80211_IFTYPE_STATION || vif->type == NL80211_IFTYPE_MESH_POINT))
+        return;
+
 #ifdef CONFIG_USE_VIF_CFG
-	if (vif->cfg.assoc)
+    if (vif->cfg.assoc)
+        return;
 #else
-	if (vif->bss_conf.assoc)
+    if (vif->bss_conf.assoc)
+        return;
 #endif
-		return;
 
-	skb = nrc_wim_alloc_skb_vif(nw, vif, WIM_CMD_SET, WIM_MAX_SIZE);
+    {
+        struct sk_buff *skb = nrc_wim_alloc_skb_vif(nw, vif, WIM_CMD_SET, WIM_MAX_SIZE);
+        if (!skb)
+            return;
 
-	if (!skb)
-		return;
-
-	nrc_mac_add_tlv_channel(skb, chan_to_follow);
-	nrc_xmit_wim_request(nw, skb);
+        nrc_mac_add_tlv_channel(skb, chan_to_follow);
+        nrc_xmit_wim_request(nw, skb);
+    }
 }
 
 #ifdef CONFIG_SUPPORT_AFTER_KERNEL_3_0_36
@@ -3124,8 +3170,9 @@ static void nrc_mac_change_chanctx(struct ieee80211_hw *hw,
 }
 
 static int nrc_mac_assign_vif_chanctx(struct ieee80211_hw *hw,
-		struct ieee80211_vif *vif,
-		struct ieee80211_chanctx_conf *ctx)
+				     struct ieee80211_vif *vif,
+				     struct ieee80211_bss_conf *link_conf,
+				     struct ieee80211_chanctx_conf *ctx)
 {
 	struct nrc *nw = hw->priv;
 	struct sk_buff *skb;
@@ -3156,8 +3203,9 @@ static int nrc_mac_assign_vif_chanctx(struct ieee80211_hw *hw,
 }
 
 static void nrc_mac_unassign_vif_chanctx(struct ieee80211_hw *hw,
-		struct ieee80211_vif *vif,
-		struct ieee80211_chanctx_conf *ctx)
+				     struct ieee80211_vif *vif,
+				     struct ieee80211_bss_conf *link_conf,
+				     struct ieee80211_chanctx_conf *ctx)
 {
 	nrc_mac_dbg("%s, vif[type:%d, addr:%pM] %d MHz/width: %d/cfreqs:%d/%d MHz\n",
 			__func__, vif->type, vif->addr,
@@ -4896,6 +4944,15 @@ struct ieee80211_hw *nrc_mac_alloc_hw (size_t priv_data_len, const char *req_nam
 {
 	struct ieee80211_hw *hw;
 	
+	if(!nrc_mac80211_ops.add_chanctx
+		|| !nrc_mac80211_ops.remove_chanctx 
+		|| !nrc_mac80211_ops.change_chanctx 
+		|| !nrc_mac80211_ops.assign_vif_chanctx 
+		|| !nrc_mac80211_ops.unassign_vif_chanctx 
+		|| !nrc_mac80211_ops.switch_vif_chanctx )
+		{
+			pr_err("No context\n");
+		}
 	hw = ieee80211_alloc_hw(priv_data_len, &nrc_mac80211_ops);
 
 	return hw;
